@@ -1,0 +1,18 @@
+[package]
+name          = 'sf-engine'
+version       = '0.1.0'
+edition       = '2021'
+authors       = ['Hwanhee Kim <kimsvrkimsvr@gmail.com>']
+description   = 'A snowflake project inference module'
+documentation = 'https://docs.rs/sf-engine'
+readme        = 'README.md'
+repository    = 'https://github.com/kimhappy/sf-engine'
+license       = 'MIT'
+
+[dependencies]
+
+[profile.release]
+strip         = true
+lto           = true
+panic         = 'abort'
+codegen-units = 1
