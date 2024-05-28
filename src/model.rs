@@ -1,6 +1,6 @@
 use super::{ sigmoid, tanh, Loader };
 
-pub struct LSTMModel<
+pub struct Model<
     const IN    : usize,
     const HIDDEN: usize > {
     lstm_weight_ii: [[f32; IN    ]; HIDDEN],
@@ -24,15 +24,14 @@ pub struct LSTMModel<
 
 impl<
     const IN    : usize,
-    const HIDDEN: usize, > LSTMModel<
-    IN    ,
-    HIDDEN > {
+    const HIDDEN: usize > Model< IN, HIDDEN > {
     pub const fn parameter_size() -> usize {
         HIDDEN * (IN * 4 + HIDDEN * 4 + 5) + 1
     }
 
-    pub fn new(buffer: [f32; Self::parameter_size()]) -> Self {
-        let mut loader = Loader::new(buffer.as_ptr(),);
+    pub fn new(ptr: *const char) -> Self {
+        let mut loader = Loader::new(ptr);
+
         let mut model  = Self {
             lstm_weight_ii: [[0.0; IN    ]; HIDDEN],
             lstm_weight_if: [[0.0; IN    ]; HIDDEN],

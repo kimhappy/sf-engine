@@ -7,8 +7,8 @@
 
 mod activation;
 mod loader;
-mod lstm_model;
+mod model;
 
 use activation::{ sigmoid, tanh };
-use loader::Loader;
-pub use lstm_model::LSTMModel;
+pub use loader::Loader;
+pub use model::Model;

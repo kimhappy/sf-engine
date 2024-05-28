@@ -1,10 +1,12 @@
+use core::intrinsics::size_of;
+
 pub struct Loader {
-    ptr   : *const f32,
+    ptr   : *const char,
     offset: usize
 }
 
 impl Loader {
-    pub fn new(ptr: *const f32) -> Self {
+    pub fn new(ptr: *const char) -> Self {
         Self {
             ptr,
             offset: 0
@@ -23,33 +25,17 @@ trait LoaderImpl {
 impl LoaderImpl for f32 {
     fn load(&mut self, loader: &mut Loader) {
         unsafe {
-            *self = *loader.ptr.add(loader.offset);
+            *self = *(loader.ptr.add(loader.offset) as *const f32);
         }
 
-        loader.offset += 1;
+        loader.offset += size_of::< f32 >()
     }
 }
 
-impl< const N: usize > LoaderImpl for [f32; N] {
+impl< T: LoaderImpl, const N: usize > LoaderImpl for [T; N] {
     fn load(&mut self, loader: &mut Loader) {
-        unsafe {
-            let src = loader.ptr.add(loader.offset);
-            let dst = self.as_mut_ptr();
-            core::ptr::copy_nonoverlapping(src, dst, N);
+        for i in 0..N {
+            self[ i ].load(loader);
         }
-
-        loader.offset += N;
-    }
-}
-
-impl< const N: usize, const M: usize > LoaderImpl for [[f32; N]; M] {
-    fn load(&mut self, loader: &mut Loader) {
-        unsafe {
-            let src = loader.ptr.add(loader.offset);
-            let dst = self.as_mut_ptr() as *mut f32;
-            core::ptr::copy_nonoverlapping(src, dst, N * M);
-        }
-
-        loader.offset += N * M;
     }
 }
