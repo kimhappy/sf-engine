@@ -1,10 +1,6 @@
 use core::ops::Deref;
 use super::{ sigmoid, tanh, Loader };
 
-pub trait Model {
-    fn forward(&mut self, inputs: &[f32]) -> f32;
-}
-
 pub struct LSTMModel<
     const IN    : usize,
     const HIDDEN: usize > {
@@ -51,12 +47,8 @@ impl<
             lstm_out      : [0.0; HIDDEN]
         })
     }
-}
 
-impl<
-    const IN    : usize,
-    const HIDDEN: usize > Model for LSTMModel< IN, HIDDEN > {
-    fn forward(&mut self, inputs: &[f32]) -> f32 {
+    pub fn forward(&mut self, inputs: &[f32]) -> f32 {
         let mut out = inputs[ 0 ] + self.dense_bias;
 
         for i in 0..HIDDEN {

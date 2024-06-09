@@ -13,6 +13,6 @@ mod config;
 
 use activation::{ sigmoid, tanh };
 use loader::Loader;
-use model::{ Model, LSTMModel };
+use model::LSTMModel;
 use config::ParamConfig;
 pub use engine::Engine;

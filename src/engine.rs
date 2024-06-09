@@ -1,12 +1,18 @@
 use core::ops::Deref;
-use super::{ Loader, Model, LSTMModel, ParamConfig };
+use super::{ Loader, LSTMModel, ParamConfig };
+
+enum Models {
+    P0(Vec< LSTMModel< 1, 48 > >),
+    P1(Vec< LSTMModel< 2, 48 > >),
+    P2(Vec< LSTMModel< 3, 48 > >),
+}
 
 pub struct Engine {
-    param_configs: Vec< ParamConfig      >,
-    models       : Vec< Box< dyn Model > >,
-    input        : Vec< f32 >             ,
-    simple_params: Vec< f32 >             ,
-    weights      : Vec< f32 >             ,
+    param_configs: Vec< ParamConfig >,
+    models       : Models            ,
+    input        : Vec< f32 >        ,
+    simple_params: Vec< f32 >        ,
+    weights      : Vec< f32 >        ,
 }
 
 impl Engine {
@@ -30,34 +36,28 @@ impl Engine {
         }).collect::< Option< Vec< _ > > >()?;
 
         let num_models = 1 << sc;
-        let models     = (0..num_models).map(|_| -> Option< Box< dyn Model > > {
-            match cc {
-                0 => Some(Box::new(LSTMModel::< 1, 48 >::from(&mut loader)?)),
-                1 => Some(Box::new(LSTMModel::< 2, 48 >::from(&mut loader)?)),
-                2 => Some(Box::new(LSTMModel::< 3, 48 >::from(&mut loader)?)),
-                _ => None,
-            }
-        }).collect::< Option< Vec< _ > > >()?;
+        let models     = match cc {
+            0 => (0..num_models).map(|_| LSTMModel::< 1, 48 >::from(&mut loader)).collect::< Option< _ > >().map(Models::P0),
+            1 => (0..num_models).map(|_| LSTMModel::< 2, 48 >::from(&mut loader)).collect::< Option< _ > >().map(Models::P1),
+            2 => (0..num_models).map(|_| LSTMModel::< 3, 48 >::from(&mut loader)).collect::< Option< _ > >().map(Models::P2),
+            _ => None
+        }?;
 
-        if loader.end() {
-            Some(Self {
-                param_configs                    ,
-                models                           ,
-                input        : vec![0f32; cc + 1],
-                simple_params: vec![0f32; sc    ],
-                weights      : {
-                    let mut zeros = vec![0f32; 1 << sc];
-                    zeros[ 0 ] = 1.0;
-                    zeros
-                } })
-        }
-        else {
-            None
-        }
+        loader.end().map(|_| Self {
+            param_configs                    ,
+            models                           ,
+            input        : vec![0f32; cc + 1],
+            simple_params: vec![0f32; sc    ],
+            weights      : {
+                let mut zeros = vec![0f32; 1 << sc];
+                zeros[ 0 ] = 1.0;
+                zeros
+            }
+        })
     }
 
     pub fn set_param(&mut self, index: usize, value: f32) -> Option< () > {
-        Some(match self.param_configs.get(index)? {
+        self.param_configs.get(index).map(|pc| match pc {
             ParamConfig::Simple(idx) => {
                 self.simple_params[ *idx ] = value;
 
@@ -72,12 +72,24 @@ impl Engine {
     }
 
     pub fn process(&mut self, sample: f32) -> f32 {
-        self.input[ 0 ] = sample;
+        const EPSILON: f32 = 1e-5;
 
-        self.models.iter_mut()
-            .zip(self.weights.iter())
-            .fold(0.0, |acc, (m, w)|
-                if   *w == 0.0 { acc                              }
-                else           { acc + w * m.forward(&self.input) })
+        self.input[ 0 ]    = sample;
+        let mut acc        = 0.0;
+        let     num_models = self.weights.len();
+
+        for i in 0..num_models {
+            if self.weights[ i ] < EPSILON {
+                continue
+            }
+
+            acc += self.weights[ i ] * match &mut self.models {
+                Models::P0(models) => models[ i ].forward(&self.input),
+                Models::P1(models) => models[ i ].forward(&self.input),
+                Models::P2(models) => models[ i ].forward(&self.input),
+            };
+        }
+
+        acc
     }
 }

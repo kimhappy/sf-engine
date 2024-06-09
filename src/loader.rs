@@ -28,8 +28,13 @@ impl< D: Deref< Target = [u8] > > Loader< D > {
         Some(unsafe { target.assume_init() })
     }
 
-    pub fn end(&self) -> bool {
-        self.offset == self.slice.len()
+    pub fn end(&self) -> Option< () > {
+        if self.offset == self.slice.len() {
+            Some(())
+        }
+        else {
+            None
+        }
     }
 }
 
