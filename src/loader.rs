@@ -1,41 +1,62 @@
-use core::intrinsics::size_of;
+use core::{
+    mem  ::size_of           ,
+    ops  ::Deref             ,
+    slice::from_raw_parts_mut,
+    mem  ::MaybeUninit
+};
 
-pub struct Loader {
-    ptr   : *const char,
+pub struct Loader< D: Deref< Target = [u8] > > {
+    slice : D,
     offset: usize
 }
 
-impl Loader {
-    pub fn new(ptr: *const char) -> Self {
+impl< D: Deref< Target = [u8] > > Loader< D > {
+    pub fn from(slice: D) -> Self {
         Self {
-            ptr,
+            slice,
             offset: 0
         }
     }
 
-    pub fn load< T: LoaderImpl >(&mut self, target: &mut T) {
-        target.load(self);
+    pub fn load_to< T >(&mut self, target: &mut T) -> Option< () > {
+        target.load_to_impl(&self.slice, &mut self.offset)
+    }
+
+    pub fn load< T >(&mut self) -> Option< T > {
+        let mut target = MaybeUninit::uninit();
+        self.load_to(&mut target)?;
+        Some(unsafe { target.assume_init() })
+    }
+
+    pub fn end(&self) -> bool {
+        self.offset == self.slice.len()
     }
 }
 
-trait LoaderImpl {
-    fn load(&mut self, loader: &mut Loader);
+trait LoadToImpl {
+    fn load_to_impl< D: Deref< Target = [u8] > >(&mut self, slice: &D, offset: &mut usize) -> Option< () >;
 }
 
-impl LoaderImpl for f32 {
-    fn load(&mut self, loader: &mut Loader) {
-        unsafe {
-            *self = *(loader.ptr.add(loader.offset) as *const f32);
-        }
-
-        loader.offset += size_of::< f32 >()
+impl< T > LoadToImpl for T {
+    fn load_to_impl< D: Deref< Target = [u8] > >(&mut self, slice: &D, offset: &mut usize) -> Option< () > {
+        let to_ptr    = self as *mut T as *mut u8;
+        let to_len    = size_of::< T >();
+        let to_slice  = unsafe { from_raw_parts_mut(to_ptr, to_len) };
+        let loaded    = slice.get(*offset..*offset + to_len)?;
+        *offset      += to_len;
+        to_slice.copy_from_slice(loaded);
+        Some(())
     }
 }
 
-impl< T: LoaderImpl, const N: usize > LoaderImpl for [T; N] {
-    fn load(&mut self, loader: &mut Loader) {
-        for i in 0..N {
-            self[ i ].load(loader);
-        }
+impl< T > LoadToImpl for [T] {
+    fn load_to_impl< D: Deref< Target = [u8] > >(&mut self, slice: &D, offset: &mut usize) -> Option< () > {
+        let to_ptr    = self.as_ptr() as *mut u8;
+        let to_len    = size_of::< T >() * self.len();
+        let to_slice  = unsafe { from_raw_parts_mut(to_ptr, to_len) };
+        let loaded    = slice.get(*offset..*offset + to_len)?;
+        *offset      += to_len;
+        to_slice.copy_from_slice(loaded);
+        Some(())
     }
 }
