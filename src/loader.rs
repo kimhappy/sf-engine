@@ -1,7 +1,7 @@
 use core::{
-    mem  ::size_of           ,
-    ops  ::Deref             ,
-    slice::from_raw_parts_mut,
+    mem  ::{ size_of, transmute_copy },
+    ops  ::Deref                      ,
+    slice::from_raw_parts_mut         ,
     mem  ::MaybeUninit
 };
 
@@ -18,14 +18,8 @@ impl< D: Deref< Target = [u8] > > Loader< D > {
         }
     }
 
-    pub fn load_to< T >(&mut self, target: &mut T) -> Option< () > {
-        target.load_to_impl(&self.slice, &mut self.offset)
-    }
-
-    pub fn load< T >(&mut self) -> Option< T > {
-        let mut target = MaybeUninit::uninit();
-        self.load_to(&mut target)?;
-        Some(unsafe { target.assume_init() })
+    pub fn load< T: LoadImpl >(&mut self) -> Option< T > {
+        LoadImpl::load_impl(&self.slice, &mut self.offset)
     }
 
     pub fn end(&self) -> Option< () > {
@@ -38,30 +32,39 @@ impl< D: Deref< Target = [u8] > > Loader< D > {
     }
 }
 
-trait LoadToImpl {
-    fn load_to_impl< D: Deref< Target = [u8] > >(&mut self, slice: &D, offset: &mut usize) -> Option< () >;
+pub trait LoadImpl {
+    fn load_impl< D: Deref< Target = [u8] > >(slice: &D, offset: &mut usize) -> Option< Self > where Self: Sized;
 }
 
-impl< T > LoadToImpl for T {
-    fn load_to_impl< D: Deref< Target = [u8] > >(&mut self, slice: &D, offset: &mut usize) -> Option< () > {
-        let to_ptr    = self as *mut T as *mut u8;
-        let to_len    = size_of::< T >();
-        let to_slice  = unsafe { from_raw_parts_mut(to_ptr, to_len) };
-        let loaded    = slice.get(*offset..*offset + to_len)?;
-        *offset      += to_len;
-        to_slice.copy_from_slice(loaded);
-        Some(())
+impl< T > LoadImpl for T {
+    default fn load_impl< D: Deref< Target = [u8] > >(slice: &D, offset: &mut usize) -> Option< Self > {
+        let mut ret        = MaybeUninit::uninit();
+        let     ptr        = ret.as_mut_ptr() as *mut u8;
+        let     len        = size_of::< T >();
+        let     ret_slice  = unsafe { from_raw_parts_mut(ptr, len) };
+        ret_slice.copy_from_slice(slice.get(*offset..*offset + len)?);
+        *offset           += len;
+        Some(unsafe { ret.assume_init() })
     }
 }
 
-impl< T > LoadToImpl for [T] {
-    fn load_to_impl< D: Deref< Target = [u8] > >(&mut self, slice: &D, offset: &mut usize) -> Option< () > {
-        let to_ptr    = self.as_ptr() as *mut u8;
-        let to_len    = size_of::< T >() * self.len();
-        let to_slice  = unsafe { from_raw_parts_mut(to_ptr, to_len) };
-        let loaded    = slice.get(*offset..*offset + to_len)?;
-        *offset      += to_len;
-        to_slice.copy_from_slice(loaded);
-        Some(())
+impl LoadImpl for String {
+    fn load_impl< D: Deref< Target = [u8] > >(slice: &D, offset: &mut usize) -> Option< Self > {
+        let tail  = slice.get(*offset..)?;
+        let pos   = tail.iter().position(|&x| x == 0)?;
+        *offset  += pos + 1;
+        std::str::from_utf8(&tail[ ..pos ]).ok().map(std::string::String::from)
+    }
+}
+
+impl< T: LoadImpl, const N: usize > LoadImpl for [T; N] {
+    fn load_impl< D: Deref< Target = [u8] > >(slice: &D, offset: &mut usize) -> Option< Self > {
+        let mut ret: [MaybeUninit::< T >; N] = unsafe { MaybeUninit::uninit().assume_init() };
+
+        for x in ret.iter_mut() {
+            x.write(LoadImpl::load_impl(slice, offset)?);
+        }
+
+        Some(unsafe { transmute_copy(&ret) })
     }
 }

@@ -1,95 +1,77 @@
 use core::ops::Deref;
-use super::{ Loader, LSTMModel, ParamConfig };
-
-enum Models {
-    P0(Vec< LSTMModel< 1, 48 > >),
-    P1(Vec< LSTMModel< 2, 48 > >),
-    P2(Vec< LSTMModel< 3, 48 > >),
-}
+use super::{ Loader, LSTMModel };
 
 pub struct Engine {
-    param_configs: Vec< ParamConfig >,
-    models       : Models            ,
-    input        : Vec< f32 >        ,
-    simple_params: Vec< f32 >        ,
-    weights      : Vec< f32 >        ,
+    model_name: String,
+    pmodel    : PModel
+}
+
+pub enum PModel {
+    P0(LSTMModel< 1, 48 >, [f32; 1], [String; 0]),
+    P1(LSTMModel< 2, 48 >, [f32; 2], [String; 1]),
+    P2(LSTMModel< 3, 48 >, [f32; 3], [String; 2]),
+    P3(LSTMModel< 4, 48 >, [f32; 4], [String; 3]),
+    P4(LSTMModel< 5, 48 >, [f32; 5], [String; 4])
 }
 
 impl Engine {
     pub fn from< D: Deref< Target = [u8] > >(data: D) -> Option< Self > {
         let mut loader = Loader::from(data);
 
-        let num_pcs          = loader.load::< u32 >()?;
-        let (mut sc, mut cc) = (0, 0);
-        let param_configs    = (0..num_pcs).map(|_| match loader.load::< u8 >()? {
-            0 => {
-                let pc = ParamConfig::Simple(sc);
-                sc += 1;
-                Some(pc)
-            }
-            1 => {
-                let pc = ParamConfig::Complex(cc);
-                cc += 1;
-                Some(pc)
-            }
-            _ => None
-        }).collect::< Option< Vec< _ > > >()?;
-
-        let num_models = 1 << sc;
-        let models     = match cc {
-            0 => (0..num_models).map(|_| LSTMModel::< 1, 48 >::from(&mut loader)).collect::< Option< _ > >().map(Models::P0),
-            1 => (0..num_models).map(|_| LSTMModel::< 2, 48 >::from(&mut loader)).collect::< Option< _ > >().map(Models::P1),
-            2 => (0..num_models).map(|_| LSTMModel::< 3, 48 >::from(&mut loader)).collect::< Option< _ > >().map(Models::P2),
+        let model_name = loader.load()?;
+        let pmodel     = match loader.load::< u32 >()? {
+            0 => LSTMModel::< 1, 48 >::from(&mut loader)
+                .and_then(|m| Some(PModel::P0(m, [0.0; 1], loader.load()?))),
+            1 => LSTMModel::< 2, 48 >::from(&mut loader)
+                .and_then(|m| Some(PModel::P1(m, [0.0; 2], loader.load()?))),
+            2 => LSTMModel::< 3, 48 >::from(&mut loader)
+                .and_then(|m| Some(PModel::P2(m, [0.0; 3], loader.load()?))),
+            3 => LSTMModel::< 4, 48 >::from(&mut loader)
+                .and_then(|m| Some(PModel::P3(m, [0.0; 4], loader.load()?))),
+            4 => LSTMModel::< 5, 48 >::from(&mut loader)
+                .and_then(|m| Some(PModel::P4(m, [0.0; 5], loader.load()?))),
             _ => None
         }?;
 
-        loader.end().map(|_| Self {
-            param_configs                    ,
-            models                           ,
-            input        : vec![0f32; cc + 1],
-            simple_params: vec![0f32; sc    ],
-            weights      : {
-                let mut zeros = vec![0f32; 1 << sc];
-                zeros[ 0 ] = 1.0;
-                zeros
-            }
-        })
+        loader.end().map(|_| Self { model_name, pmodel })
     }
 
-    pub fn set_param(&mut self, index: usize, value: f32) -> Option< () > {
-        self.param_configs.get(index).map(|pc| match pc {
-            ParamConfig::Simple(idx) => {
-                self.simple_params[ *idx ] = value;
+    pub fn model_name(&self) -> &str {
+        &self.model_name
+    }
 
-                for i in 0..self.weights.len() {
-                    self.weights[ i ] = self.simple_params.iter().enumerate().fold(1.0, |acc, (j, &p)| acc * if i & (1 << j) != 0 { p } else { 1.0 - p });
-                }
-            },
-            ParamConfig::Complex(idx) => {
-                self.input[ idx + 1 ] = value
-            }
-        })
+    pub fn parameter_name(&self, index: usize) -> Option< &str > {
+        match &self.pmodel {
+            PModel::P0(.., names) => names.get(index),
+            PModel::P1(.., names) => names.get(index),
+            PModel::P2(.., names) => names.get(index),
+            PModel::P3(.., names) => names.get(index),
+            PModel::P4(.., names) => names.get(index)
+        }.map(|s| s.as_str())
     }
 
     pub fn process(&mut self, sample: f32) -> f32 {
-        const EPSILON: f32 = 1e-5;
-
-        self.input[ 0 ]    = sample;
-        let mut acc        = 0.0;
-        let     num_models = self.weights.len();
-
-        for i in 0..num_models {
-            if self.weights[ i ] < EPSILON {
-                continue
-            }
-
-            acc += self.weights[ i ] * match &mut self.models {
-                Models::P0(models) => models[ i ].forward(&self.input),
-                Models::P1(models) => models[ i ].forward(&self.input),
-                Models::P2(models) => models[ i ].forward(&self.input),
-            };
+        match &mut self.pmodel {
+            PModel::P0(model, input, ..) => {
+                input[ 0 ] = sample;
+                model.forward(input)
+            },
+            PModel::P1(model, input, ..) => {
+                input[ 0 ] = sample;
+                model.forward(input)
+            },
+            PModel::P2(model, input, ..) => {
+                input[ 0 ] = sample;
+                model.forward(input)
+            },
+            PModel::P3(model, input, ..) => {
+                input[ 0 ] = sample;
+                model.forward(input)
+            },
+            PModel::P4(model, input, ..) => {
+                input[ 0 ] = sample;
+                model.forward(input)
+            },
         }
-
-        acc
     }
 }

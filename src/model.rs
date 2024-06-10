@@ -48,7 +48,7 @@ impl<
         })
     }
 
-    pub fn forward(&mut self, inputs: &[f32]) -> f32 {
+    pub fn forward(&mut self, inputs: &[f32; IN]) -> f32 {
         let mut out = inputs[ 0 ] + self.dense_bias;
 
         for i in 0..HIDDEN {
