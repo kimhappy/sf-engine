@@ -1,4 +1,5 @@
 use core::ops::Deref;
+
 use super::{ Loader, LSTMModel };
 
 pub struct Engine {
@@ -23,20 +24,36 @@ impl Engine {
             return None;
         }
 
-        let model_name = loader.load()?;
-        let pmodel     = match loader.load::< u32 >()? {
-            0 => LSTMModel::< 1, 48 >::from(&mut loader)
-                .and_then(|m| Some(PModel::P0(m, [0.0; 1], loader.load()?))),
-            1 => LSTMModel::< 2, 48 >::from(&mut loader)
-                .and_then(|m| Some(PModel::P1(m, [0.0; 2], loader.load()?))),
-            2 => LSTMModel::< 3, 48 >::from(&mut loader)
-                .and_then(|m| Some(PModel::P2(m, [0.0; 3], loader.load()?))),
-            3 => LSTMModel::< 4, 48 >::from(&mut loader)
-                .and_then(|m| Some(PModel::P3(m, [0.0; 4], loader.load()?))),
-            4 => LSTMModel::< 5, 48 >::from(&mut loader)
-                .and_then(|m| Some(PModel::P4(m, [0.0; 5], loader.load()?))),
-            _ => None
-        }?;
+        let model_name = loader.load         ()?;
+        let num_params = loader.load::< u32 >()?;
+        let pmodel     = match num_params {
+            0 => {
+                let names = loader.load()?;
+                let model = LSTMModel::< 1, 48 >::from(&mut loader)?;
+                PModel::P0(model, [0.0; 1], names)
+            },
+            1 => {
+                let names = loader.load()?;
+                let model = LSTMModel::< 2, 48 >::from(&mut loader)?;
+                PModel::P1(model, [0.0; 2], names)
+            },
+            2 => {
+                let names = loader.load()?;
+                let model = LSTMModel::< 3, 48 >::from(&mut loader)?;
+                PModel::P2(model, [0.0; 3], names)
+            },
+            3 => {
+                let names = loader.load()?;
+                let model = LSTMModel::< 4, 48 >::from(&mut loader)?;
+                PModel::P3(model, [0.0; 4], names)
+            },
+            4 => {
+                let names = loader.load()?;
+                let model = LSTMModel::< 5, 48 >::from(&mut loader)?;
+                PModel::P4(model, [0.0; 5], names)
+            },
+            _ => return None
+        };
 
         loader.end().map(|_| Self { model_name, pmodel })
     }
