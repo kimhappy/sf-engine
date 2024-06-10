@@ -16,7 +16,12 @@ pub enum PModel {
 
 impl Engine {
     pub fn from< D: Deref< Target = [u8] > >(data: D) -> Option< Self > {
-        let mut loader = Loader::from(data);
+        let mut loader  = Loader::from(data);
+        let     version = loader.load::< u32 >()?;
+
+        if version != 0 {
+            return None;
+        }
 
         let model_name = loader.load()?;
         let pmodel     = match loader.load::< u32 >()? {
