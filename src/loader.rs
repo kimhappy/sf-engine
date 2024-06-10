@@ -50,10 +50,10 @@ impl< T > LoadImpl for T {
 
 impl LoadImpl for String {
     fn load_impl< D: Deref< Target = [u8] > >(slice: &D, offset: &mut usize) -> Option< Self > {
-        let tail  = slice.get(*offset..)?;
-        let pos   = tail.iter().position(|&x| x == 0)?;
-        *offset  += pos + 1;
-        std::str::from_utf8(&tail[ ..pos ]).ok().map(std::string::String::from)
+        let len  = < u32 as LoadImpl >::load_impl(slice, offset)?;
+        let str  = slice.get(*offset..*offset + len as usize)?;
+        *offset += len as usize;
+        std::str::from_utf8(str).ok().map(|x| x.to_string())
     }
 }
 
