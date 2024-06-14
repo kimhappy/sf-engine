@@ -1,5 +1,6 @@
 use core::ops::Deref;
-use super::{ sigmoid, tanh, Loader };
+use crate::utils::Loader;
+use super::{ sigmoid, tanh };
 
 pub struct LSTMModel<
     const IN    : usize,

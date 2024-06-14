@@ -1,6 +1,6 @@
 use core::ops::Deref;
-
-use super::{ Loader, LSTMModel };
+use crate::utils::Loader;
+use super::LSTMModel;
 
 pub struct Engine {
     model_name: String,
